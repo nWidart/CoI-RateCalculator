@@ -1,0 +1,12 @@
+{
+  "id": "RateCalculator",
+  "display_name": "Rate Calculator",
+  "version": "0.0.1",
+  "primary_dlls": [ "RateCalculator.dll" ],
+  "description_short": "Calculate maximum production and consumption rates for the selected machines.",
+  "description_long": "Calculate maximum production and consumption rates for the selected machines.",
+  "authors":  [ "Nicolas Widart" ],
+  "non_locking_dll_load": true,
+  "can_add_to_saved_game": true,
+  "can_remove_from_saved_game": true
+}

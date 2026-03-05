@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using RateCalculator.Extensions;
-using RateCalculator.UserInterface.Framework;
 using Mafi;
 using Mafi.Collections;
 using Mafi.Core.Products;
@@ -11,6 +9,8 @@ using Mafi.Unity.InputControl;
 using Mafi.Unity.Ui.Library;
 using Mafi.Unity.UiToolkit.Component;
 using Mafi.Unity.UiToolkit.Library;
+using RateCalculator.Extensions;
+using RateCalculator.UserInterface.Framework;
 
 namespace RateCalculator.UserInterface.RateCalculator;
 
@@ -36,7 +36,7 @@ public class RateCalculatorWindowUi : Window
         _productsDic = productsDic;
         _intermediatesDictionary = intermediatesDic;
     }
-    
+
     private void SetData(Dict<ProductProto, ProductBalance> balances, Dict<ProductProto, List<ProductProto>> dependencies)
     {
         _balances = balances;
@@ -51,7 +51,7 @@ public class RateCalculatorWindowUi : Window
                     _globalEfficiency = ratio;
             }
         }
-        
+
         _efficiencyCache = new Dict<ProductProto, Fix32>();
         foreach (var (product, _) in _balances)
         {
@@ -61,188 +61,172 @@ public class RateCalculatorWindowUi : Window
 
     public RateCalculatorWindowUi() : base(new LocStrFormatted("Rate Calculator"), true)
     {
-        WindowSize(1000.px(), Px.Auto);
+        WindowSize(1000.px(), 600.px());
         MakeMovable();
         EnablePinning();
 
-        var statsPanel = UiFramework.StartNewPanel(new[] { GetStatsSection() });
-        
-        var ingredientsPanel = GetIngredientsPanel();
-        var productsPanel = GetProductsPanel();
-        var intermediatesPanel = GetIntermediatesPanel();
+        // 1. Options panel: Right aligned drop down menu
+        var optionsRow = new Row();
+        optionsRow.AlignItemsCenter();
+        optionsRow.PaddingTopBottom(4.pt());
+        optionsRow.PaddingRight(10.px());
 
-        Body.Add(statsPanel, ingredientsPanel, productsPanel, intermediatesPanel);
-    }
-    
-    private Panel GetProductsPanel()
-    {
-        var host = this;
-        var productWrapperRow = UiFramework.StartNewEmptyRow();
-        var productsSection = UiFramework.StartNewSection("Products".AsLoc());
-        productsSection.Add(productWrapperRow);
-        
-        var productsPanel = UiFramework.StartNewPanel(new[] { productsSection });
-        
-        this
-            .Observe((Func<List<ProductProto>>)(() => host._productsDic))
-            .Do(products =>
+        // Spacer to push things to the right
+        var spacer = new UiComponent();
+        spacer.FlexGrow(1);
+        optionsRow.Add(spacer);
+
+        var dropdown = new Dropdown<string>((opt, idx, isInDropdown) => new Label(opt.ToDoLoc()).MinWidth(100.px()));
+        dropdown.SetOptions("60 seconds", "3 months", "6 months");
+        dropdown.SetValueIndex(0);
+        dropdown.Width(150.px());
+        optionsRow.Add(dropdown);
+
+        var optionsPanel = UiFramework.StartNewPanel(new[] { optionsRow });
+        optionsPanel.AlignSelfStretch();
+
+        // 2. Stats panel (one row): Keep only the Displays of GetStatsSection but not the labels. Horizontal display.
+        var statsRow = GetStatsRow();
+        var statsPanel = UiFramework.StartNewPanel(new[] { statsRow });
+        statsPanel.AlignSelfStretch();
+
+        // 3. 2 columns:
+        // left: ingredients panel (full height)
+        // right row 1 : products panel
+        // right row 2: intermediates panel
+
+        var ingredientsPanel = GetProductsPanel(
+            "Ingredients",
+            host => host._ingredientsDic,
+            (container, product) =>
             {
-                productWrapperRow.Clear();
-                var row = new Row();
-                foreach (var product in products)
-                {
-                    var icon = new Icon(product)
-                        .Size(ProductQuantityUi.ICON_HEIGHT)
-                        .MarginRight(10.px());
-                    row.Add(icon);
+                var icon = new Icon(product)
+                    .Size(ProductQuantityUi.ICON_HEIGHT)
+                    .MarginRight(10.px());
+                container.Add(icon);
 
-                    var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
-                    var theoretical = balance.Produced;
-
-                    var efficiency = Fix32.One;
-                    if (_efficiencyCache != null && _efficiencyCache.TryGetValue(product, out var effFromCache))
-                        efficiency = effFromCache;
-
-                    var realistic = theoretical * efficiency;
-
-                    var theoreticalStr = theoretical.ToFloat().ToString("0.##");
-                    var realisticStr = realistic.ToFloat().ToString("0.##");
-
-                    var producedDisplay = new Display()
-                        .Large()
-                        .Value($"{theoreticalStr}  →  {realisticStr}".ToDoLoc());
-
-                    if (efficiency < Fix32.One)
-                    {
-                        producedDisplay.StateWarning();
-                        producedDisplay.Tooltip($"Production limited to {(efficiency * 100).ToFloat():0.#}%".AsLoc());
-                    }
-
-                    row.Add(producedDisplay);
-                }
-                productWrapperRow.Add(row);
+                var balance = _balances[product];
+                var consumedDisplay = new Display()
+                    .Large()
+                    .Value($"{balance.Consumed}".ToDoLoc());
+                container.Add(consumedDisplay);
+                container.MarginRight(15.px());
             });
+        ingredientsPanel.Width(300.px());
+        ingredientsPanel.AlignSelfStretch();
 
-        return productsPanel;
-    }
-    
-    private Panel GetIngredientsPanel()
-    {
-        var host = this;
-        var wrapperRow = UiFramework.StartNewEmptyRow();
-        var productsSection = UiFramework.StartNewSection("Ingredients".AsLoc());
-        productsSection.Add(wrapperRow);
-        var productsPanel = UiFramework.StartNewPanel(new[] { productsSection });
-        
-        this
-            .Observe((Func<List<ProductProto>>)(() => host._ingredientsDic))
-            .Do(products =>
+        var productsPanel = GetProductsPanel(
+            "Products",
+            host => host._productsDic,
+            (container, product) =>
             {
-                wrapperRow.Clear();
+                var icon = new Icon(product)
+                    .Size(ProductQuantityUi.ICON_HEIGHT)
+                    .MarginRight(10.px());
+                container.Add(icon);
 
-                var row = new Row();
-                foreach (var product in products)
-                {
-                    var icon = new Icon(product)
-                        .Size(ProductQuantityUi.ICON_HEIGHT)
-                        .MarginRight(10.px());
-                    row.Add(icon);
-
-                    var balance = _balances[product];
-                    var consumedDisplay = new Display()
-                        .Large()
-                        .Value($"{balance.Consumed}".ToDoLoc());
-
-                    row.Add(consumedDisplay);
-                }
-                wrapperRow.Add(row);
+                var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
+                var producedDisplay = new Display()
+                    .Large()
+                    .Value($"{balance.Produced}".ToDoLoc());
+                container.Add(producedDisplay);
+                container.MarginRight(15.px());
             });
-        
-        return productsPanel;
-    }
+        productsPanel.FlexGrow(1);
+        productsPanel.AlignSelfStretch();
 
-    private Panel GetIntermediatesPanel()
-    {
-        var host = this;
-        var wrapperRow = UiFramework.StartNewEmptyRow();
-        var productsSection = UiFramework.StartNewSection("Intermediates".AsLoc());
-        productsSection.Add(wrapperRow);
-        var productsPanel = UiFramework.StartNewPanel(new[] { productsSection });
-        
-        this
-            .Observe((Func<List<ProductProto>>)(() => host._intermediatesDictionary))
-            .Do(products =>
+        var intermediatesPanel = GetProductsPanel(
+            "Intermediates",
+            host => host._intermediatesDictionary,
+            (container, product) =>
             {
-                wrapperRow.Clear();
+                var icon = new Icon(product)
+                    .Size(ProductQuantityUi.ICON_HEIGHT)
+                    .MarginRight(10.px());
+                container.Add(icon);
 
-                var row = new Row();
+                var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
+                var display = new Display()
+                    .Large()
+                    .Value($"{balance.Produced}".ToDoLoc());
 
-                foreach (var product in products)
+                if (balance.Net < Fix32.Zero)
                 {
-                    var icon = new Icon(product)
-                        .Large()
-                        .MarginRight(10.px());
-
-                    var balance = _balances[product];
-                    var display = new Display().Value($"{balance.Produced}".ToDoLoc());
-                    display.Large();
-                    if (balance.Net < Fix32.Zero)
-                    {
-                        display.StateDanger();
-                        display.Tooltip($"Underproduced by {-balance.Net}".ToDoLoc());
-                    }
-                    else if (balance.Net > Fix32.Zero)
-                    {
-                        display.StateWarning();
-                        display.Tooltip($"Overproduced by (+{balance.Net})".ToDoLoc());
-                    }
-
-                    row.Add(icon);
-                    row.Add(display);
+                    display.StateDanger();
+                    display.Tooltip($"Underproduced by {-balance.Net}".ToDoLoc());
+                }
+                else if (balance.Net > Fix32.Zero)
+                {
+                    display.StateWarning();
+                    display.Tooltip($"Overproduced by (+{balance.Net})".ToDoLoc());
                 }
 
-                wrapperRow.Add(row);
+                container.Add(display);
+                container.MarginRight(15.px());
             });
+        intermediatesPanel.FlexGrow(1);
+        intermediatesPanel.AlignSelfStretch();
 
-        return productsPanel;
+        var rightColumn = new Column(10.px());
+        rightColumn.Add(productsPanel);
+        rightColumn.Add(intermediatesPanel);
+        rightColumn.FlexGrow(1);
+        rightColumn.AlignItemsStretch();
+        rightColumn.AlignSelfStretch();
+
+        var mainLayout = new Row(10.px());
+        mainLayout.Add(ingredientsPanel);
+        mainLayout.Add(rightColumn);
+        mainLayout.FlexGrow(1);
+        mainLayout.AlignItemsStretch();
+
+        Body.Gap(10.px());
+        Body.Add(optionsPanel);
+        Body.Add(statsPanel);
+        Body.Add(mainLayout);
     }
-    
-    private Column GetStatsSection()
+
+    private UiComponent GetStatsRow()
     {
-        var maintenanceLabel = UiFramework.NewLabel("Total maintenance costs/month:");
-        UiComponent maintenance1Display = new DisplayWithIcon()
+        var maintenance1Display = new DisplayWithIcon()
             .IconValue("Assets/Base/Products/Icons/Maintenance1.svg")
+            .Tooltip("Total maintenance 1 costs/month:".AsLoc())
             .ObserveValue(() => _statsSummery.TotalMaintenance1PerMonth.ToStringRounded());
-        UiComponent maintenance2Display = new DisplayWithIcon()
+        var maintenance2Display = new DisplayWithIcon()
             .IconValue("Assets/Base/Products/Icons/Maintenance2.svg")
+            .Tooltip("Total maintenance 2 costs/month:".AsLoc())
             .ObserveValue(() => _statsSummery.TotalMaintenance2PerMonth.ToStringRounded());
-        UiComponent maintenance3Display = new DisplayWithIcon()
+        var maintenance3Display = new DisplayWithIcon()
             .IconValue("Assets/Base/Products/Icons/Maintenance3.svg")
+            .Tooltip("Total maintenance 3 costs/month:".AsLoc())
             .ObserveValue(() => _statsSummery.TotalMaintenance3PerMonth.ToStringRounded());
-        var maintenanceRow = UiFramework.StartNewRow(new[] { maintenanceLabel, maintenance1Display, maintenance2Display, maintenance3Display });
 
-        var powerLabel = UiFramework.NewLabel("Total power required: ");
-        UiComponent powerDisplay = new DisplayWithIcon()
+        var powerDisplay = new DisplayWithIcon()
             .IconValue("Assets/Unity/UserInterface/General/Electricity.svg")
-            .Tooltip("Total power required to run selection".AsLoc())
+            .Tooltip("Total power per month".AsLoc())
             .ObserveValue(() => _statsSummery.TotalPowerRequired.Format());
-        var powerRow = UiFramework.StartNewRow(new[] { powerLabel, powerDisplay });
 
-        var workersLabel = UiFramework.NewLabel("Total workers required: ");
-        UiComponent workersDisplay = new DisplayWithIcon()
+        var workersDisplay = new DisplayWithIcon()
             .IconValue("Assets/Unity/UserInterface/General/WorkerSmall.svg")
+            .Tooltip("Total workers assigned".AsLoc())
             .ObserveValue(() => _statsSummery.TotalWorkersAssigned);
-        var workersRow = UiFramework.StartNewRow(new[] { workersLabel, workersDisplay });
 
-        var computingLabel = UiFramework.NewLabel("Total computing required: ");
-        UiComponent computingDisplay = new DisplayWithIcon()
+        var computingDisplay = new DisplayWithIcon()
             .IconValue("Assets/Unity/UserInterface/General/Computing128.png")
+            .Tooltip("Total computing required per month".AsLoc())
             .ObserveValue(() => _statsSummery.ComputingRequired.Format());
-        var computingRow = UiFramework.StartNewRow(new[] { computingLabel, computingDisplay });
 
-        return UiFramework.StartNewSection(new LocStrFormatted("Statistics"), new[] { maintenanceRow, powerRow, workersRow, computingRow });
+        var row = new Row(10.px());
+        row.Add(maintenance1Display);
+        row.Add(maintenance2Display);
+        row.Add(maintenance3Display);
+        row.Add(powerDisplay);
+        row.Add(workersDisplay);
+        row.Add(computingDisplay);
+        row.Padding(4.pt());
+        return row;
     }
-    
+
     private static Fix32 ComputeEfficiency(
         ProductProto product,
         Dict<ProductProto, ProductBalance> balances,
@@ -262,6 +246,7 @@ public class RateCalculatorWindowUi : Window
             cache[product] = cycleAvail;
             return cycleAvail;
         }
+
         visiting.Add(product);
 
         // if we don't have a balance entry treat as unlimited (or: produced=0,consumed=0)
@@ -284,6 +269,35 @@ public class RateCalculatorWindowUi : Window
         visiting.Remove(product);
         cache[product] = efficiency;
         return efficiency;
+    }
+
+    private Panel GetProductsPanel(
+        string title,
+        Func<RateCalculatorWindowUi, List<ProductProto>> productsSelector,
+        Action<Row, ProductProto> addProductUi)
+    {
+        var host = this;
+
+        var section = UiFramework.StartNewSection(title.AsLoc());
+        var row = UiFramework.StartNewEmptyRow();
+        section.Add(row);
+
+        this
+            .Observe((Func<List<ProductProto>>)(() => productsSelector(host)))
+            .Do(products =>
+            {
+                row.Clear();
+
+                var itemContainer = new Row(5.px());
+                foreach (var product in products)
+                {
+                    addProductUi(itemContainer, product);
+                }
+
+                row.Add(itemContainer);
+            });
+
+        return UiFramework.StartNewPanel(new[] { section });
     }
 
     [GlobalDependency(RegistrationMode.AsEverything)]

@@ -30,6 +30,8 @@ public class StatsSummeryService
         foreach (var selectedEntity in selectedEntities)
         {
             if (selectedEntity.IsPaused) continue;
+            if (selectedEntity.ConstructionState != ConstructionState.Constructed) continue;
+            
             if (selectedEntity is IMaintainedEntity maintainedEntity)
             {
                 var maintenancePerMonth = maintainedEntity.Maintenance.Costs.MaintenancePerMonth;

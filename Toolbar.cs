@@ -136,6 +136,7 @@ public class Toolbar : BaseEntityCursorInputController<IStaticEntity>
         {
             if (selectedEntity is not Machine machine) continue;
             if (machine.IsPaused) continue;
+            if (machine.ConstructionState != ConstructionState.Constructed) continue;
 
             foreach (var recipeProto in machine.RecipesAssigned.AsEnumerable())
             {

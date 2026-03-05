@@ -17,6 +17,7 @@ namespace RateCalculator.UserInterface.RateCalculator;
 [GlobalDependency(RegistrationMode.AsEverything)]
 public class RateCalculatorWindowUi : Window
 {
+    private TimeSelectionOption _selectedTimeOption = TimeSelectionOption.Seconds60;
     private StatsSummery _statsSummery;
     private List<ProductProto> _ingredientsDic;
     private List<ProductProto> _productsDic;
@@ -65,7 +66,6 @@ public class RateCalculatorWindowUi : Window
         MakeMovable();
         EnablePinning();
 
-        // 1. Options panel: Right aligned drop down menu
         var optionsRow = new Row();
         optionsRow.AlignItemsCenter();
         optionsRow.PaddingTopBottom(4.pt());
@@ -76,24 +76,18 @@ public class RateCalculatorWindowUi : Window
         spacer.FlexGrow(1);
         optionsRow.Add(spacer);
 
-        var dropdown = new Dropdown<string>((opt, idx, isInDropdown) => new Label(opt.ToDoLoc()).MinWidth(100.px()));
-        dropdown.SetOptions("60 seconds", "3 months", "6 months");
-        dropdown.SetValueIndex(0);
+        var dropdown = new Dropdown<TimeSelectionOption>((opt, idx, isInDropdown) => new Label(opt.ToDisplayText().ToDoLoc()).MinWidth(100.px()));
+        dropdown.SetOptions(TimeSelectionOptionExtensions.GetOptions());
+        dropdown.OnValueChanged((v, idx) => _selectedTimeOption = v);
         dropdown.Width(150.px());
         optionsRow.Add(dropdown);
 
         var optionsPanel = UiFramework.StartNewPanel(new[] { optionsRow });
         optionsPanel.AlignSelfStretch();
 
-        // 2. Stats panel (one row): Keep only the Displays of GetStatsSection but not the labels. Horizontal display.
         var statsRow = GetStatsRow();
         var statsPanel = UiFramework.StartNewPanel(new[] { statsRow });
         statsPanel.AlignSelfStretch();
-
-        // 3. 2 columns:
-        // left: ingredients panel (full height)
-        // right row 1 : products panel
-        // right row 2: intermediates panel
 
         var ingredientsPanel = GetProductsPanel(
             "Ingredients",
@@ -108,7 +102,7 @@ public class RateCalculatorWindowUi : Window
                 var balance = _balances[product];
                 var consumedDisplay = new Display()
                     .Large()
-                    .Value($"{balance.Consumed}".ToDoLoc());
+                    .ObserveValue(() => (balance.Consumed * _selectedTimeOption.GetMultiplier()).ToString().ToDoLoc());
                 container.Add(consumedDisplay);
                 container.MarginRight(15.px());
             });
@@ -128,7 +122,7 @@ public class RateCalculatorWindowUi : Window
                 var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
                 var producedDisplay = new Display()
                     .Large()
-                    .Value($"{balance.Produced}".ToDoLoc());
+                    .ObserveValue(() => (balance.Produced * _selectedTimeOption.GetMultiplier()).ToString().ToDoLoc());
                 container.Add(producedDisplay);
                 container.MarginRight(15.px());
             });
@@ -148,17 +142,17 @@ public class RateCalculatorWindowUi : Window
                 var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
                 var display = new Display()
                     .Large()
-                    .Value($"{balance.Produced}".ToDoLoc());
+                    .ObserveValue(() => (balance.Produced * _selectedTimeOption.GetMultiplier()).ToString().ToDoLoc());
 
                 if (balance.Net < Fix32.Zero)
                 {
                     display.StateDanger();
-                    display.Tooltip($"Underproduced by {-balance.Net}".ToDoLoc());
+                    display.Tooltip($"Underproduced by {-(balance.Net * _selectedTimeOption.GetMultiplier())}".ToDoLoc());
                 }
                 else if (balance.Net > Fix32.Zero)
                 {
                     display.StateWarning();
-                    display.Tooltip($"Overproduced by (+{balance.Net})".ToDoLoc());
+                    display.Tooltip($"Overproduced by (+{balance.Net * _selectedTimeOption.GetMultiplier()})".ToDoLoc());
                 }
 
                 container.Add(display);
@@ -190,20 +184,20 @@ public class RateCalculatorWindowUi : Window
     {
         var maintenance1Display = new DisplayWithIcon()
             .IconValue("Assets/Base/Products/Icons/Maintenance1.svg")
-            .Tooltip("Total maintenance 1 costs/month:".AsLoc())
+            .Tooltip("Total maintenance 1 costs:".AsLoc())
             .ObserveValue(() => _statsSummery.TotalMaintenance1PerMonth.ToStringRounded());
         var maintenance2Display = new DisplayWithIcon()
             .IconValue("Assets/Base/Products/Icons/Maintenance2.svg")
-            .Tooltip("Total maintenance 2 costs/month:".AsLoc())
+            .Tooltip("Total maintenance 2 costs:".AsLoc())
             .ObserveValue(() => _statsSummery.TotalMaintenance2PerMonth.ToStringRounded());
         var maintenance3Display = new DisplayWithIcon()
             .IconValue("Assets/Base/Products/Icons/Maintenance3.svg")
-            .Tooltip("Total maintenance 3 costs/month:".AsLoc())
+            .Tooltip("Total maintenance 3 costs:".AsLoc())
             .ObserveValue(() => _statsSummery.TotalMaintenance3PerMonth.ToStringRounded());
 
         var powerDisplay = new DisplayWithIcon()
             .IconValue("Assets/Unity/UserInterface/General/Electricity.svg")
-            .Tooltip("Total power per month".AsLoc())
+            .Tooltip("Total power".AsLoc())
             .ObserveValue(() => _statsSummery.TotalPowerRequired.Format());
 
         var workersDisplay = new DisplayWithIcon()
@@ -213,7 +207,7 @@ public class RateCalculatorWindowUi : Window
 
         var computingDisplay = new DisplayWithIcon()
             .IconValue("Assets/Unity/UserInterface/General/Computing128.png")
-            .Tooltip("Total computing required per month".AsLoc())
+            .Tooltip("Total computing required".AsLoc())
             .ObserveValue(() => _statsSummery.ComputingRequired.Format());
 
         var row = new Row(10.px());

@@ -8,5 +8,6 @@
   "authors":  [ "Nicolas Widart" ],
   "non_locking_dll_load": true,
   "can_add_to_saved_game": true,
-  "can_remove_from_saved_game": true
+  "can_remove_from_saved_game": true,
+  "min_game_version": "0.8.0"
 }

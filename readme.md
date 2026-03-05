@@ -9,6 +9,7 @@ Download the latest release from the [releases page](https://github.com/CaptainO
 Place the file in the `mods` folder of your game.
 
 > The mods folder is located in `...`
+> You can get this path from the Steam client via Properties... -> Local Files -> Browse.
 
 ## Usage
 

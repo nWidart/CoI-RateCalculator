@@ -19,8 +19,8 @@ public static class TimeSelectionOptionExtensions
         return option switch
         {
             TimeSelectionOption.Seconds60 => Fix32.One, // 1 month = 60 seconds
-            TimeSelectionOption.Months3 => 3,
-            TimeSelectionOption.Months6 => 6,
+            TimeSelectionOption.Months3 => Fix32.FromInt(3),
+            TimeSelectionOption.Months6 => Fix32.FromInt(6),
             _ => Fix32.One
         };
     }

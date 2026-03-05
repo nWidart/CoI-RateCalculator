@@ -105,7 +105,8 @@ public class RateCalculatorWindowUi : Window
                     .ObserveValue(() => (balance.Consumed * _selectedTimeOption.GetMultiplier()).ToString().ToDoLoc());
                 container.Add(consumedDisplay);
                 container.MarginRight(15.px());
-            });
+            },
+            isVertical: true);
         ingredientsPanel.Width(300.px());
         ingredientsPanel.AlignSelfStretch();
 
@@ -268,7 +269,8 @@ public class RateCalculatorWindowUi : Window
     private Panel GetProductsPanel(
         string title,
         Func<RateCalculatorWindowUi, List<ProductProto>> productsSelector,
-        Action<Row, ProductProto> addProductUi)
+        Action<Row, ProductProto> addProductUi,
+        bool isVertical = false)
     {
         var host = this;
 
@@ -282,10 +284,17 @@ public class RateCalculatorWindowUi : Window
             {
                 row.Clear();
 
-                var itemContainer = new Row(5.px());
-                foreach (var product in products)
+                var itemsPerRow = isVertical ? 1 : 7;
+                var itemContainer = new Column(5.px());
+                Row currentRow = null;
+                for (int i = 0; i < products.Count; i++)
                 {
-                    addProductUi(itemContainer, product);
+                    if (i % itemsPerRow == 0)
+                    {
+                        currentRow = new Row(5.px());
+                        itemContainer.Add(currentRow);
+                    }
+                    addProductUi(currentRow, products[i]);
                 }
 
                 row.Add(itemContainer);

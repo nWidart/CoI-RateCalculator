@@ -29,6 +29,7 @@ public class StatsSummeryService
         var statsSummery = new StatsSummery();
         foreach (var selectedEntity in selectedEntities)
         {
+            if (selectedEntity.IsPaused) continue;
             if (selectedEntity is IMaintainedEntity maintainedEntity)
             {
                 var maintenancePerMonth = maintainedEntity.Maintenance.Costs.MaintenancePerMonth;

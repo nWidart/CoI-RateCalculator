@@ -65,20 +65,8 @@ public class RateCalculatorWindowUi : Window
         MakeMovable();
         EnablePinning();
 
-        var tableSection = UiFramework.StartNewSection(new LocStrFormatted("Table"));
-        var tableUi = new TableUi.CellRow();
-        tableUi.Add(c => c.JustifyItemsCenter().MinHeight(34.px()).Hide());
-        tableUi.Add(new Label("No data yet".AsLoc()).FontItalic());
-        tableSection.Add(tableUi);
-
         var statsPanel = UiFramework.StartNewPanel(new[] { GetStatsSection() });
-        var tablePanel = UiFramework.StartNewPanel(new[] { tableSection });
-
-        /*
-         * ingredients |
-         *             |   products      | 
-         *             |   intermediates |
-         */
+        
         var ingredientsPanel = GetIngredientsPanel();
         var productsPanel = GetProductsPanel();
         var intermediatesPanel = GetIntermediatesPanel();

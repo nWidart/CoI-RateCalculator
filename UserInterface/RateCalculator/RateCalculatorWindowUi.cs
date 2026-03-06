@@ -62,7 +62,7 @@ public class RateCalculatorWindowUi : Window
 
     public RateCalculatorWindowUi() : base(new LocStrFormatted("Rate Calculator"), true)
     {
-        WindowSize(1000.px(), 600.px());
+        WindowSize(1000.px(), Px.Auto);
         MakeMovable();
         EnablePinning();
 
@@ -78,6 +78,7 @@ public class RateCalculatorWindowUi : Window
 
         var dropdown = new Dropdown<TimeSelectionOption>((opt, idx, isInDropdown) => new Label(opt.ToDisplayText().ToDoLoc()).MinWidth(100.px()));
         dropdown.SetOptions(TimeSelectionOptionExtensions.GetOptions());
+        dropdown.SetValue(TimeSelectionOption.Seconds60);
         dropdown.OnValueChanged((v, idx) => _selectedTimeOption = v);
         dropdown.Width(150.px());
         optionsRow.Add(dropdown);
@@ -94,19 +95,25 @@ public class RateCalculatorWindowUi : Window
             host => host._ingredientsDic,
             (container, product) =>
             {
-                var icon = new Icon(product)
-                    .Size(ProductQuantityUi.ICON_HEIGHT)
-                    .MarginRight(10.px());
-                container.Add(icon);
+                var icon = new Icon(product).Size(ProductQuantityUi.ICON_HEIGHT);
+                var iconCell = new Row().MinWidth(35.px());
+                iconCell.Add(icon);
+                container.Add(iconCell);
 
                 var balance = _balances[product];
                 var consumedDisplay = new Display()
                     .Large()
                     .ObserveValue(() => (balance.Consumed * _selectedTimeOption.GetMultiplier()).ToString().ToDoLoc());
-                container.Add(consumedDisplay);
-                container.MarginRight(15.px());
+                
+                var displayCell = new Row();
+                displayCell.FlexGrow(1);
+                var spacer = new UiComponent();
+                spacer.FlexGrow(1);
+                displayCell.Add(spacer);
+                displayCell.Add(consumedDisplay);
+                container.Add(displayCell);
             },
-            isVertical: true);
+            columnsCount: 2);
         ingredientsPanel.Width(300.px());
         ingredientsPanel.AlignSelfStretch();
 
@@ -115,18 +122,54 @@ public class RateCalculatorWindowUi : Window
             host => host._productsDic,
             (container, product) =>
             {
-                var icon = new Icon(product)
-                    .Size(ProductQuantityUi.ICON_HEIGHT)
-                    .MarginRight(10.px());
-                container.Add(icon);
+                var icon = new Icon(product).Size(ProductQuantityUi.ICON_HEIGHT);
+                var iconCell = new Row().MinWidth(35.px());
+                iconCell.Add(icon);
+                container.Add(iconCell);
 
                 var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
+                var efficiency = _efficiencyCache.TryGetValue(product, out var eff) ? eff : Fix32.Zero;
+                
                 var producedDisplay = new Display()
                     .Large()
-                    .ObserveValue(() => (balance.Produced * _selectedTimeOption.GetMultiplier()).ToString().ToDoLoc());
-                container.Add(producedDisplay);
-                container.MarginRight(15.px());
-            });
+                    .ObserveValue(() =>
+                    {
+                        var maxProduced = balance.Produced * _selectedTimeOption.GetMultiplier();
+                        var realProduced = (maxProduced * efficiency).ToIntRounded();
+                        return realProduced.ToString().ToDoLoc();
+                    });
+
+                var displayCell = new Row();
+                displayCell.FlexGrow(1);
+                var spacer1 = new UiComponent();
+                spacer1.FlexGrow(1);
+                displayCell.Add(spacer1);
+                displayCell.Add(producedDisplay);
+                container.Add(displayCell);
+                
+                var efficiencyDisplay = new Display()
+                    .Large()
+                    .ObserveValue(() => (efficiency * 100).ToIntRounded().ToString().ToDoLoc() + "%".ToDoLoc());
+                if (efficiency < Fix32.One)
+                {
+                    this.Observe(() => _selectedTimeOption).Do(_ =>
+                    {
+                        var maxProduced = balance.Produced * _selectedTimeOption.GetMultiplier();
+                        var realProduced = (maxProduced * efficiency).ToIntRounded();
+                        producedDisplay.Tooltip($"Producing {realProduced} instead of {maxProduced}".ToDoLoc());
+                    });
+                    producedDisplay.StateDanger();
+                    efficiencyDisplay.StateDanger();
+                }
+
+                var efficiencyCell = new Row().MinWidth(60.px());
+                var spacer2 = new UiComponent();
+                spacer2.FlexGrow(1);
+                efficiencyCell.Add(spacer2);
+                efficiencyCell.Add(efficiencyDisplay);
+                container.Add(efficiencyCell);
+            },
+            columnsCount: 4);
         productsPanel.FlexGrow(1);
         productsPanel.AlignSelfStretch();
 
@@ -135,10 +178,10 @@ public class RateCalculatorWindowUi : Window
             host => host._intermediatesDictionary,
             (container, product) =>
             {
-                var icon = new Icon(product)
-                    .Size(ProductQuantityUi.ICON_HEIGHT)
-                    .MarginRight(10.px());
-                container.Add(icon);
+                var icon = new Icon(product).Size(ProductQuantityUi.ICON_HEIGHT);
+                var iconCell = new Row().MinWidth(35.px());
+                iconCell.Add(icon);
+                container.Add(iconCell);
 
                 var balance = _balances.TryGetValue(product, out var bal) ? bal : new ProductBalance();
                 var display = new Display()
@@ -148,7 +191,7 @@ public class RateCalculatorWindowUi : Window
                 if (balance.Net < Fix32.Zero)
                 {
                     display.StateDanger();
-                    display.Tooltip($"Underproduced by {-(balance.Net * _selectedTimeOption.GetMultiplier())}".ToDoLoc());
+                    display.Tooltip($"Underproduced by (-{-(balance.Net * _selectedTimeOption.GetMultiplier())})".ToDoLoc());
                 }
                 else if (balance.Net > Fix32.Zero)
                 {
@@ -156,9 +199,15 @@ public class RateCalculatorWindowUi : Window
                     display.Tooltip($"Overproduced by (+{balance.Net * _selectedTimeOption.GetMultiplier()})".ToDoLoc());
                 }
 
-                container.Add(display);
-                container.MarginRight(15.px());
-            });
+                var displayCell = new Row();
+                displayCell.FlexGrow(1);
+                var spacer1 = new UiComponent();
+                spacer1.FlexGrow(1);
+                displayCell.Add(spacer1);
+                displayCell.Add(display);
+                container.Add(displayCell);
+            },
+            columnsCount: 4);
         intermediatesPanel.FlexGrow(1);
         intermediatesPanel.AlignSelfStretch();
 
@@ -172,13 +221,16 @@ public class RateCalculatorWindowUi : Window
         var mainLayout = new Row(10.px());
         mainLayout.Add(ingredientsPanel);
         mainLayout.Add(rightColumn);
-        mainLayout.FlexGrow(1);
         mainLayout.AlignItemsStretch();
 
-        Body.Gap(10.px());
-        Body.Add(optionsPanel);
-        Body.Add(statsPanel);
-        Body.Add(mainLayout);
+        var scrollColumn = new ScrollColumn();
+        scrollColumn.AlignSelfStretch().FlexGrow(1);
+        scrollColumn.Gap(10.px());
+        scrollColumn.Add(optionsPanel);
+        scrollColumn.Add(statsPanel);
+        scrollColumn.Add(mainLayout);
+
+        Body.Add(scrollColumn);
     }
 
     private UiComponent GetStatsRow()
@@ -270,34 +322,62 @@ public class RateCalculatorWindowUi : Window
         string title,
         Func<RateCalculatorWindowUi, List<ProductProto>> productsSelector,
         Action<Row, ProductProto> addProductUi,
-        bool isVertical = false)
+        int columnsCount = 1)
     {
         var host = this;
 
         var section = UiFramework.StartNewSection(title.AsLoc());
-        var row = UiFramework.StartNewEmptyRow();
-        section.Add(row);
+        var itemContainer = new Column(5.px());
+        itemContainer.AlignItemsStretch();
+        section.Add(itemContainer);
 
         this
             .Observe((Func<List<ProductProto>>)(() => productsSelector(host)))
             .Do(products =>
             {
-                row.Clear();
+                itemContainer.Clear();
 
-                var itemsPerRow = isVertical ? 1 : 7;
-                var itemContainer = new Column(5.px());
                 Row currentRow = null;
                 for (int i = 0; i < products.Count; i++)
                 {
-                    if (i % itemsPerRow == 0)
+                    if (i % columnsCount == 0)
                     {
-                        currentRow = new Row(5.px());
+                        currentRow = new Row();
+                        currentRow.AlignItemsCenter().PaddingTopBottom(2.px());
+                        currentRow.AlignSelfStretch();
                         itemContainer.Add(currentRow);
                     }
-                    addProductUi(currentRow, products[i]);
+
+                    var itemCell = new Row();
+                    itemCell.AlignItemsCenter().PaddingLeftRight(5.px()).FlexGrow(1).MinWidth(1.px());
+                    addProductUi(itemCell, products[i]);
+                    currentRow.Add(itemCell);
                 }
 
-                row.Add(itemContainer);
+                if (products.Count % columnsCount != 0 && currentRow != null)
+                {
+                    var remainder = products.Count % columnsCount;
+                    var missingCells = columnsCount - remainder;
+
+                    for (var j = 0; j < missingCells; j++)
+                    {
+                        var emptyCell = new Row();
+                        emptyCell.AlignItemsCenter()
+                            .PaddingLeftRight(5.px())
+                            .FlexGrow(1)
+                            .AlignSelfStretch()
+                            .MinHeight(1.px())
+                            .MinWidth(80.px());
+                        var emptyLabel = new Label("empty".AsLoc()).AlignSelfStretch().Hide();
+
+                        var filler = new UiComponent();
+                        filler.FlexGrow(1);
+
+                        emptyCell.Add(filler);
+                        emptyCell.Add(emptyLabel);
+                        currentRow.Add(emptyCell);
+                    }
+                }
             });
 
         return UiFramework.StartNewPanel(new[] { section });
